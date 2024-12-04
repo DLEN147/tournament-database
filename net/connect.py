@@ -3,8 +3,13 @@ import oracledb
 
 class DatabaseManager:
     def __init__(self, user, password, host, port, service_name):
-        dsn = oracledb.makedsn(host, port, service_name=service_name)
-        self.connection = oracledb.connect(user=user, password=password, dsn=dsn)
+        self.dsn = oracledb.makedsn(host, port, service_name=service_name)
+        try:
+            self.connection = oracledb.connect(user=user, password=password, dsn=self.dsn)
+            print("Conexión exitosa.")
+        except oracledb.Error as e:
+            print("Error de conexión", f"Hubo un error al conectar a la base de datos: {e}")
+            raise
 
     def execute_query(self, query, params=None):
         try:
@@ -13,35 +18,33 @@ class DatabaseManager:
                     cursor.execute(query, params)
                 else:
                     cursor.execute(query)
-
                 if query.strip().upper().startswith("SELECT"):
-                    return cursor.fetchall()
-
+                    # Obtener los nombres de las columnas
+                    columns = [desc[0] for desc in cursor.description]
+                    # Obtener los resultados de la consulta
+                    rows = cursor.fetchall()
+                    return columns, rows
                 self.connection.commit()
                 return []
         except Exception as e:
-            print(f"Error en execute_query: {e}")  # Imprimir detalles del error
-            print(f"Query: {query}")  # Imprimir la consulta que causó el error
-            print(f"Params: {params}")  # Imprimir los parámetros
-            raise  # Re-lanzar la excepción para que sea manejada por el llamador
+            print("Error al ejecutar consulta", f"Error: {e}")
+            return []
 
     def close_connection(self):
-        """
-        Cierra la conexión a la base de datos.
-        """
         if self.connection:
             self.connection.close()
+            print("Conexión cerrada.")
 
 
 def ranking_players():
     return """
-    SELECT p.first_name || ' ' || p.last_name AS player_name, 
-           SUM(tp.score) AS total_score
-    FROM Players pl
-    JOIN TeamPlayer tp ON pl.player_id = tp.player_id
-    JOIN People p ON pl.person_id = p.person_id
-    GROUP BY p.first_name, p.last_name
-    ORDER BY total_score DESC
+        SELECT p.first_name || ' ' || p.last_name AS player_name, 
+               SUM(tp.score) AS total_score
+        FROM Players pl
+        JOIN TeamPlayer tp ON pl.player_id = tp.player_id
+        JOIN People p ON pl.person_id = p.person_id
+        GROUP BY p.first_name, p.last_name
+        ORDER BY total_score DESC
     """
 
 
@@ -108,5 +111,3 @@ def team_ranking():
     GROUP BY t.team_name
     ORDER BY average_score DESC
     """
-
-
